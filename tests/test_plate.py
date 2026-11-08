@@ -94,13 +94,65 @@ def test_plate_languages_use_shared_plate_files():
             assert os.path.isfile(config.template_path(key, lang)), (lang, key)
 
         assert config.template_filename("continue", lang) == "continue_btn.png"
-        assert not config.uses_template("claim_single", lang)
+        assert config.uses_template("claim_single", lang)
     assert config.uses_template("claim_single", "en")
 
 def test_every_language_has_its_core_templates():
     for lang in config.LANGS:
         for key in ("play", "continue", "skip", "return_lobby"):
             assert os.path.isfile(config.template_path(key, lang)), (lang, key)
+
+
+def test_language_neutral_japanese_button_plates_load_as_masked_templates():
+    for key in ("play", "return_lobby", "claim_single", "menu_return"):
+        for lang in config.LANGS:
+            plate = load_template_auto(config.template_path(key, lang), config.PLATES[key])
+            assert isinstance(plate, Plate), (lang, key)
+
+
+def test_japanese_and_english_action_buttons_match_the_same_plate():
+    cases = (
+        ("play", "play_btn.png", "play_btn_en.png", (40, 530)),
+        ("return_lobby", "return_lobby_btn.png", "return_lobby_btn_en.png", (720, 230)),
+        ("claim_single", "claim_single_btn.png", "claim_single_btn_en.png", (800, 620)),
+    )
+    for key, japanese, english, (x, y) in cases:
+        plate = load_template_auto(config.template_path(key, "ja"), config.PLATES[key])
+        for filename in (japanese, english):
+            button = cv2.imdecode(np.fromfile(config.assets_dir() + "/" + filename, np.uint8), cv2.IMREAD_COLOR)
+            frame = np.full((720, 1280, 3), 35, np.uint8)
+            h, w = button.shape[:2]
+            frame[y:y + h, x:x + w] = button
+            match, score = find_plate(frame, plate, Settings().scales)
+            assert match is not None and score >= plate.threshold, (key, filename, score)
+
+
+def test_japanese_and_english_claim_buttons_use_their_matching_assets():
+    for lang, filename in (("ja", "claim_btn.png"), ("en", "claim_btn_en.png")):
+        template = load_template_auto(config.template_path("claim", lang), config.PLATES["claim"])
+        assert isinstance(template, Plate), lang
+        button = cv2.imdecode(np.fromfile(config.assets_dir() + "/" + filename, np.uint8), cv2.IMREAD_COLOR)
+        frame = np.full((720, 1280, 3), 35, np.uint8)
+        h, w = button.shape[:2]
+        frame[620:620 + h, 800:800 + w] = button
+        match, score = find_plate(frame, template, Settings().scales)
+        assert match is not None and score >= template.threshold, (lang, score)
+
+
+def test_menu_return_plate_ignores_japanese_menu_labels():
+    plate = load_template_auto(config.template_path("menu_return", "ja"), config.PLATES["menu_return"])
+    source = cv2.imdecode(np.fromfile(config.assets_dir() + "/menu_return_btn.png", np.uint8), cv2.IMREAD_COLOR)
+    frame = np.full((720, 1280, 3), 35, np.uint8)
+    x, y = 650, 80
+    h, w = source.shape[:2]
+    frame[y:y + h, x:x + w] = source
+    baseline, baseline_score = find_plate(frame, plate, Settings().scales)
+    frame[y + 117:y + 158, x + 88:x + 270] = 255
+    frame[y + 187:y + 231, x + 55:x + 295] = 0
+    changed_text, changed_score = find_plate(frame, plate, Settings().scales)
+    assert baseline is not None and changed_text is not None
+    assert abs(baseline_score - changed_score) < 0.03
+
 
 def test_shipped_plates_are_real_plates():
     for key in LABEL_PLATES:

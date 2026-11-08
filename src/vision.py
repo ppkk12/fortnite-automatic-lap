@@ -32,6 +32,13 @@ def load_template_auto(path, plate=None):
         return np.ascontiguousarray(img[:, :, :3])
     if img.ndim == 2:
         return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    if plate is not None:
+        return Plate(
+            np.ascontiguousarray(img[:, :, :3]),
+            np.full(img.shape[:2], 255, dtype=np.uint8),
+            tuple(plate["roi"]),
+            plate["threshold"],
+        )
     return img
 
 def capture_screen(monitor_index=1, region=None):
@@ -86,17 +93,26 @@ def find_plate(
     fh, fw = frame.shape[:2]
     x0, y0 = int(plate.roi[0] * fw), int(plate.roi[1] * fh)
     x1, y1 = int(plate.roi[2] * fw), int(plate.roi[3] * fh)
-    region = frame[y0:y1, x0:x1]
+    region = _gray(frame[y0:y1, x0:x1])
     if region.size == 0:
         return None, 0.0
+    template = _gray(plate.image)
+    full_mask = bool(np.all(plate.mask == 255))
 
     def match(img, base, scale):
         f = base * scale
-        t = cv2.resize(plate.image, None, fx=f, fy=f, interpolation=cv2.INTER_AREA if f < 1 else cv2.INTER_LINEAR)
+        t = cv2.resize(template, None, fx=f, fy=f, interpolation=cv2.INTER_AREA if f < 1 else cv2.INTER_LINEAR)
         m = cv2.resize(plate.mask, (t.shape[1], t.shape[0]), interpolation=cv2.INTER_NEAREST)
         if t.shape[0] >= img.shape[0] or t.shape[1] >= img.shape[1] or min(t.shape[:2]) < 6 or not m.any():
             return -2.0, 0, 0
-        res = np.nan_to_num(cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED, mask=m), nan=-1.0, posinf=-1.0, neginf=-1.0)
+        if full_mask:
+            res = cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED)
+        else:
+            # OpenCV's masked TM_CCOEFF_NORMED is substantially slower than its
+            # masked normalized-difference implementation. Convert its distance
+            # score back to a similarity score so Plate thresholds stay intuitive.
+            res = 1.0 - cv2.matchTemplate(img, t, cv2.TM_SQDIFF_NORMED, mask=m)
+        res = np.nan_to_num(res, nan=-1.0, posinf=-1.0, neginf=-1.0)
         _, val, _, loc = cv2.minMaxLoc(res)
         return float(val), x0 + loc[0] + t.shape[1] // 2, y0 + loc[1] + t.shape[0] // 2
 

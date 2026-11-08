@@ -11,6 +11,9 @@ TEMPLATE_NAMES = {
     "claim": "claim_btn.png",
     "claim_single": "claim_single_btn.png",
     "popup": "popup_btn.png",
+    # Language-independent Pirate Shop Access icon from Fortnite.GG.
+    # https://fortnite.gg/img/x/treasure-hunt/token.webp
+    "pirate_token": "pirate_token_btn.webp",
 
     "hud": "hud_btn.png",
     "menu_btn": "menu_btn.png",
@@ -19,7 +22,7 @@ TEMPLATE_NAMES = {
 
 MODES = {"A": "A: 通常ループ (続行→スキップ→ロビーへ)", "B": "B: 待機島で待ってEscから退出"}
 
-OPTIONAL_TEMPLATES = {"popup", "claim", "claim_single"}
+OPTIONAL_TEMPLATES = {"popup", "claim", "claim_single", "pirate_token"}
 
 LANGS = {
     "ja": "日本語",
@@ -30,21 +33,25 @@ LANGS = {
 }
 PLATE_LANGS = ("es", "pt", "ru")
 
-LANG_INDEPENDENT = {"continue", "skip", "hud", "menu_btn", "menu_return"}
+LANG_INDEPENDENT = {"continue", "skip", "hud", "menu_btn", "pirate_token"}
+LANG_NEUTRAL_PLATES = {"play", "return_lobby", "claim_single", "menu_return"}
 
 PLATES = {
     "play": {"roi": (0.0, 0.70, 0.40, 1.0), "threshold": 0.92},
-    "return_lobby": {"roi": (0.55, 0.30, 1.0, 0.52), "threshold": 0.80},
+    "return_lobby": {"roi": (0.55, 0.30, 1.0, 0.52), "threshold": 0.92},
     "claim": {"roi": (0.503, 0.80, 1.0, 1.0), "threshold": 0.93},
-
+    "claim_single": {"roi": (0.503, 0.80, 1.0, 1.0), "threshold": 0.92},
+    "pirate_token": {"roi": (0.34, 0.06, 0.66, 0.38), "threshold": 0.90},
     "hud": {"roi": (0.0, 0.85, 0.30, 1.0), "threshold": 0.90},
     "menu_btn": {"roi": (0.70, 0.0, 1.0, 0.18), "threshold": 0.85},
-    "menu_return": {"roi": (0.55, 0.0, 1.0, 0.36), "threshold": 0.85},
+    "menu_return": {"roi": (0.45, 0.0, 1.0, 0.55), "threshold": 0.88},
 }
 
-PLATE_UNUSED = {"claim_single"}
+PLATE_UNUSED = set()
 
 def plate_filename(key):
+    if key == "claim_single":
+        return "claim_single_btn_plate.png"
     return TEMPLATE_NAMES[key].replace(".png", "_plate.png")
 
 def uses_template(key, lang):
@@ -52,6 +59,8 @@ def uses_template(key, lang):
 
 def template_filename(key, lang = "ja"):
     name = TEMPLATE_NAMES[key]
+    if key in LANG_NEUTRAL_PLATES:
+        return plate_filename(key)
     if key in LANG_INDEPENDENT:
         return name
     if lang in PLATE_LANGS and key in PLATES:
